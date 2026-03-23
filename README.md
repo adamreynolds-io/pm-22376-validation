@@ -16,6 +16,8 @@ The midnight-node-toolkit panics at `midnight-storage-core/arena.rs:1784` when d
 4. Call `takeDown()` circuit — removes message
 5. Verify state via indexer after each step
 
+Each step logs timing, tx hash, block height, and status.
+
 ## Prerequisites
 
 - Node.js >= 22
@@ -42,6 +44,40 @@ MIDNIGHT_NETWORK=mainnet MIDNIGHT_SEED=<hex-seed> yarn test
 docker compose down
 ```
 
+## Debug Mode
+
+For full diagnostics including wallet sync progress, sub-wallet states, and operation timing:
+
+```bash
+LOG_LEVEL=debug MIDNIGHT_NETWORK=local yarn test
+```
+
+Example output:
+
+```
+[wallet-sync] starting...
+Wallet sync [1]:  shielded=false, unshielded=false, dust=false
+  shielded.progress: {"appliedIndex":0,"highestRelevantWalletIndex":0,"isConnected":false}
+Wallet sync [14]: shielded=true,  unshielded=true,  dust=false
+  dust.progress: {"appliedIndex":49,"highestRelevantWalletIndex":128,"isConnected":true}
+Wallet sync [22]: shielded=true,  unshielded=true,  dust=true
+Wallet sync complete after 22 emissions
+[wallet-sync] completed in 0.6s
+
+[deploy] starting...
+[deploy] completed in 18.2s
+Contract address: 9fd03b42...
+Deploy tx hash: eb29a4c5...
+Deploy block height: 6
+
+[post] starting...
+[post] completed in 17.2s
+post() tx hash: 13de69d4...
+post() block height: 9
+post() status: SucceedEntirely
+Ledger state: state=1, message="PM-22376 validation ...", sequence=1
+```
+
 ## Recompile Contract (Optional)
 
 The compiled contract artifacts are included. To recompile:
@@ -61,13 +97,13 @@ compact compile +0.30.0 contract/bboard.compact contract/managed/bboard
 ## Local Test Results
 
 ```
-✓ deploy bboard contract          20001ms
-✓ call post() circuit             17173ms
-✓ call takeDown() circuit         17382ms
+✓ deploy bboard contract          18218ms
+✓ call post() circuit             17175ms
+✓ call takeDown() circuit         18707ms
 
 Test Files  1 passed (1)
 Tests       3 passed (3)
-Duration    86.52s
+Duration    56.17s
 ```
 
 ## SDK Versions
