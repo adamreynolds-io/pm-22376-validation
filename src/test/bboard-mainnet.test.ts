@@ -86,10 +86,6 @@ async function checkHealth(config: { proofServer: string; indexer: string; node:
       url: config.indexer,
       body: JSON.stringify({ query: '{ __typename }' }),
     },
-    {
-      name: 'node',
-      url: `${config.node}/health`,
-    },
   ];
 
   for (const check of checks) {
