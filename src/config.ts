@@ -18,12 +18,14 @@ export const LOCAL_CONFIG: NetworkConfig = {
   faucet: '',
 };
 
+const mainnetRpcHost = process.env['MIDNIGHT_RPC_HOST'] ?? 'rpc.mainnet.midnight.network';
+
 export const MAINNET_CONFIG: NetworkConfig = {
   networkId: 'mainnet',
-  indexer: 'https://indexer.mainnet.midnight.network/api/v3/graphql',
-  indexerWS: 'wss://indexer.mainnet.midnight.network/api/v3/graphql/ws',
-  node: 'https://rpc.mainnet.midnight.network',
-  nodeWS: 'wss://rpc.mainnet.midnight.network',
+  indexer: process.env['MIDNIGHT_INDEXER'] ?? 'https://indexer.mainnet.midnight.network/api/v3/graphql',
+  indexerWS: process.env['MIDNIGHT_INDEXER_WS'] ?? 'wss://indexer.mainnet.midnight.network/api/v3/graphql/ws',
+  node: `https://${mainnetRpcHost}`,
+  nodeWS: `wss://${mainnetRpcHost}`,
   proofServer: process.env['PROOF_SERVER_URL'] ?? 'http://localhost:6300',
   faucet: '',
 };
