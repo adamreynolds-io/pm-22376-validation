@@ -15,6 +15,7 @@ import { WebSocket } from 'ws';
 import { randomBytes } from 'node:crypto';
 import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 import {
+  createUnprovenDeployTx,
   deployContract,
   submitCallTx,
 } from '@midnight-ntwrk/midnight-js-contracts';
@@ -181,20 +182,49 @@ describe('PM-22376: bboard contract via midnight-js', () => {
     async () => {
       const initialPrivateState = createBBoardPrivateState(randomBytes(32));
 
+      // Step 1: Create unproven deploy tx (local circuit execution)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const deployed: any = await timed('deploy', () =>
-        (deployContract as any)(providers, {
+      const unprovenData: any = await timed('deploy:1-create-unproven', () =>
+        (createUnprovenDeployTx as any)(providers, {
           compiledContract: CompiledBBoardContract,
           privateStateId: PRIVATE_STATE_ID,
           initialPrivateState,
           args: [],
         }),
       );
+      const pendingAddress = unprovenData.public?.contractAddress;
+      logger.info(`Unproven tx created. Pending contract address: ${pendingAddress}`);
 
-      contractAddress = deployed.deployTxData.public.contractAddress;
+      // Step 2: Prove (send to proof server, get ZK proof back)
+      const provenTx = await timed('deploy:2-prove', () =>
+        providers.proofProvider.proveTx(unprovenData.private.unprovenTx),
+      );
+      logger.info('Proven tx received from proof server');
+
+      // Step 3: Balance (wallet adds fees/coins to the tx)
+      const balancedTx = await timed('deploy:3-balance', () =>
+        providers.walletProvider.balanceTx(provenTx),
+      );
+      logger.info('Balanced tx ready for submission');
+
+      // Step 4: Submit (send to network node)
+      const txId = await timed('deploy:4-submit', () =>
+        providers.midnightProvider.submitTx(balancedTx),
+      );
+      logger.info(`Submitted tx id: ${txId}`);
+
+      // Step 5: Wait for on-chain confirmation (indexer watches for block inclusion)
+      const finalizedTxData = await timed('deploy:5-wait-confirmation', () =>
+        providers.publicDataProvider.watchForTxData(txId),
+      );
+      logger.info(`Finalized! Status: ${finalizedTxData.status}, block: ${finalizedTxData.blockHeight}`);
+
+      // Store private state (normally done inside deployContract)
+      providers.privateStateProvider.setContractAddress(pendingAddress);
+      await providers.privateStateProvider.set(PRIVATE_STATE_ID, initialPrivateState);
+
+      contractAddress = pendingAddress;
       logger.info(`Contract address: ${contractAddress}`);
-      logger.info(`Deploy tx hash: ${deployed.deployTxData.public.txHash}`);
-      logger.info(`Deploy block height: ${deployed.deployTxData.public.blockHeight}`);
       expect(contractAddress).toBeDefined();
       expect(contractAddress.length).toBeGreaterThan(0);
     },
