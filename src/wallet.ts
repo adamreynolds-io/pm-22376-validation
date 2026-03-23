@@ -123,16 +123,26 @@ export async function syncWallet(
   timeout = 300_000,
 ): Promise<FacadeState> {
   logger.info('Syncing wallet...');
+  let emissionCount = 0;
   return Rx.firstValueFrom(
     wallet.state().pipe(
-      Rx.throttleTime(5_000),
       Rx.tap((state: FacadeState) => {
+        emissionCount++;
         const shielded = isProgressStrictlyComplete(state.shielded.state.progress);
         const unshielded = isProgressStrictlyComplete(state.unshielded.progress);
         const dust = isProgressStrictlyComplete(state.dust.state.progress);
-        logger.debug(
-          `Wallet sync: shielded=${shielded}, unshielded=${unshielded}, dust=${dust}`,
+        logger.info(
+          `Wallet sync [${emissionCount}]: shielded=${shielded}, unshielded=${unshielded}, dust=${dust}`,
         );
+        if (!shielded) {
+          logger.debug(`  shielded.progress: ${JSON.stringify(state.shielded.state.progress)}`);
+        }
+        if (!unshielded) {
+          logger.debug(`  unshielded.progress: ${JSON.stringify(state.unshielded.progress)}`);
+        }
+        if (!dust) {
+          logger.debug(`  dust.progress: ${JSON.stringify(state.dust.state.progress)}`);
+        }
       }),
       Rx.filter(
         (state: FacadeState) =>
@@ -140,13 +150,17 @@ export async function syncWallet(
           isProgressStrictlyComplete(state.dust.state.progress) &&
           isProgressStrictlyComplete(state.unshielded.progress),
       ),
-      Rx.tap(() => logger.info('Wallet sync complete')),
+      Rx.tap(() => logger.info(`Wallet sync complete after ${emissionCount} emissions`)),
       Rx.timeout({
         each: timeout,
         with: () =>
           Rx.throwError(
-            () => new Error(`Wallet sync timeout after ${timeout}ms`),
+            () => new Error(`Wallet sync timeout after ${timeout}ms (${emissionCount} emissions received)`),
           ),
+      }),
+      Rx.catchError((err) => {
+        logger.error(`Wallet sync error: ${err}`);
+        return Rx.throwError(() => err);
       }),
     ),
   );
