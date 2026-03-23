@@ -37,6 +37,16 @@ import type { EnvironmentConfiguration } from '@midnight-ntwrk/testkit-js';
 // @ts-expect-error WebSocket global assignment for apollo
 globalThis.WebSocket = WebSocket;
 
+// Catch unhandled rejections so vitest doesn't silently exit
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION:', reason);
+  console.error('Promise:', promise);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+});
+
 // Genesis seed for local dev node — pre-funded with tokens
 const LOCAL_DEV_SEED =
   '0000000000000000000000000000000000000000000000000000000000000001';
@@ -60,9 +70,51 @@ async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
     logger.info(`[${label}] completed in ${elapsed(start)}`);
     return result;
   } catch (err) {
-    logger.error(`[${label}] failed after ${elapsed(start)}: ${err}`);
+    logger.error(`[${label}] FAILED after ${elapsed(start)}: ${err}`);
     throw err;
   }
+}
+
+async function checkHealth(config: { proofServer: string; indexer: string; node: string }): Promise<void> {
+  const checks = [
+    {
+      name: 'proof-server',
+      url: `${config.proofServer}/version`,
+    },
+    {
+      name: 'indexer',
+      url: config.indexer,
+      body: JSON.stringify({ query: '{ __typename }' }),
+    },
+    {
+      name: 'node',
+      url: `${config.node}/health`,
+    },
+  ];
+
+  for (const check of checks) {
+    const start = Date.now();
+    try {
+      const opts: RequestInit = {
+        method: check.body ? 'POST' : 'GET',
+        headers: check.body ? { 'Content-Type': 'application/json' } : undefined,
+        body: check.body,
+        signal: AbortSignal.timeout(10_000),
+      };
+      const res = await fetch(check.url, opts);
+      const text = await res.text();
+      const ok = res.status >= 200 && res.status < 400;
+      if (ok) {
+        logger.info(`[health] ${check.name}: OK (${res.status}) in ${elapsed(start)} — ${text.slice(0, 100)}`);
+      } else {
+        throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+      }
+    } catch (err) {
+      logger.error(`[health] ${check.name}: FAILED after ${elapsed(start)} — ${err}`);
+      throw new Error(`${check.name} health check failed at ${check.url}: ${err}`);
+    }
+  }
+  logger.info('[health] All services healthy');
 }
 
 describe('PM-22376: bboard contract via midnight-js', () => {
@@ -84,9 +136,14 @@ describe('PM-22376: bboard contract via midnight-js', () => {
 
     logger.info(`Network: ${config.networkId}`);
     logger.info(`Indexer: ${config.indexer}`);
+    logger.info(`Indexer WS: ${config.indexerWS}`);
     logger.info(`Node: ${config.node}`);
+    logger.info(`Node WS: ${config.nodeWS}`);
     logger.info(`Proof server: ${config.proofServer}`);
     setNetworkId(config.networkId);
+
+    // Pre-flight health checks
+    await timed('health-check', () => checkHealth(config));
 
     const envConfig: EnvironmentConfiguration = {
       walletNetworkId: config.networkId,
