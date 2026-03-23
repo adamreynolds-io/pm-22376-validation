@@ -62,9 +62,12 @@ function elapsed(start: number): string {
   return `${((Date.now() - start) / 1000).toFixed(1)}s`;
 }
 
-async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
+async function timed<T>(label: string, fn: () => Promise<T>, heartbeatMs = 10_000): Promise<T> {
   const start = Date.now();
   logger.info(`[${label}] starting...`);
+  const heartbeat = setInterval(() => {
+    logger.info(`[${label}] still running... ${elapsed(start)} elapsed`);
+  }, heartbeatMs);
   try {
     const result = await fn();
     logger.info(`[${label}] completed in ${elapsed(start)}`);
@@ -72,6 +75,8 @@ async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
   } catch (err) {
     logger.error(`[${label}] FAILED after ${elapsed(start)}: ${err}`);
     throw err;
+  } finally {
+    clearInterval(heartbeat);
   }
 }
 
@@ -188,12 +193,8 @@ describe('PM-22376: bboard contract via midnight-js', () => {
 
       contractAddress = deployed.deployTxData.public.contractAddress;
       logger.info(`Contract address: ${contractAddress}`);
-      logger.info(
-        `Deploy tx hash: ${deployed.deployTxData.public.txHash}`,
-      );
-      logger.info(
-        `Deploy block height: ${deployed.deployTxData.public.blockHeight}`,
-      );
+      logger.info(`Deploy tx hash: ${deployed.deployTxData.public.txHash}`);
+      logger.info(`Deploy block height: ${deployed.deployTxData.public.blockHeight}`);
       expect(contractAddress).toBeDefined();
       expect(contractAddress.length).toBeGreaterThan(0);
     },
