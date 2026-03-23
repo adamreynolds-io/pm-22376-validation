@@ -18,7 +18,7 @@ export const LOCAL_CONFIG: NetworkConfig = {
   faucet: '',
 };
 
-const mainnetRpcHost = process.env['MIDNIGHT_RPC_HOST'] ?? 'rpc.mainnet.midnight.network';
+const mainnetRpcHost = process.env['MIDNIGHT_RPC_HOST'] ?? 'td-rpc.mainnet.midnight.network';
 
 export const MAINNET_CONFIG: NetworkConfig = {
   networkId: 'mainnet',
